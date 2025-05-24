@@ -2,13 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import router from './routes/web.js';
 import Conexion from './config/Conexion.js';
+import path from 'path';
 
 const app = express();
 //indicamos que va utilizar algo
+Conexion();
 app.use(express.json()); //trabajaremos con formatos json
 app.use(cors()); 
-Conexion();
 // dotenv.config() //leer variables de entorno
+app.use('/uploads', express.static(path.join(process.cwd(), '/', 'uploads')));
 app.use("/",router)
 
 app.use((recibido, respuesta)=>{

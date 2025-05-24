@@ -1,17 +1,16 @@
 import jwt from "jsonwebtoken";
 
-const authMiddleware = (recibido, respuesta,next) => {
-    const token = recibido.header("Autorizacion");
+const authMiddleware = (req, res, next) => {
+    const token = req.header("Authorization");
     try {
-        if (!token) return respuesta.status(401).json({"msj":"Token no proporcionado!"});
-        
-        const decodificado = jwt.verify(token.replace("Back ", ""), process.env.JWT_SECRET);
-
-        respuesta.user = decodificado;
+        if (!token) return res.status(401).json({ msj: "Token no proporcionado o formato incorrecto" });
+        const decodificado = jwt.verify(token.replace("Bearer ",""),process.env.JWT_SECRET);
+        res.user = decodificado;
         next(); 
     } catch (error) {
-        respuesta.status(500).json({"msj":"Se a generado un error en el servidor"});
+        console.error("Error al verificar el token", error);
+        res.status(500).json({ msj: "Se ha generado un error al verificar el token" });
     }
-}
+};
 
 export default authMiddleware;

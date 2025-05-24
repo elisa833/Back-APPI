@@ -5,12 +5,22 @@ import bcrypt from 'bcryptjs';
 
 const registro_usuario = async (recibido,respuesta) => {
     try {
-        const {usuario, password,rol} = recibido.body;
+        const {usuario, password,rol,registro} = recibido.body;
+        console.log("Datos recibidos:", usuario, password, rol);
         const cifrado = await bcrypt.hash(password,10);
-        const registro = new Usuario({"usuario":usuario,"password":cifrado,"rol":rol,"estado":0});
-        await registro.save();
-        respuesta.status(201).json({"msj":"Usuario registrado","registro":registro})
+        const nuevoUsuario = new Usuario({"usuario":usuario,"password":cifrado,rol,"estado":0});
+        await nuevoUsuario.save();
+
+        const token = jwt.sign(
+            { id: nuevoUsuario._id, rol: nuevoUsuario.rol },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" }
+        );
+
+        respuesta.status(201).json({"msj":"Usuario registrado","registro":registro, token: token})
+
     } catch (error) {
+        console.error("Error en registro:", error);
         respuesta.status(500).json({"msj":error})
     }
 }
@@ -26,13 +36,13 @@ const iniciar_sesion = async (recibido,respuesta) => {
         if (!comparacion) return respuesta.status(500).json({"msj":"Credenciales de acceso invalidas!!!"})
         
         const token = jwt.sign({
-            id:consultaUsuario._id, 
+            "id":consultaUsuario._id, 
             "rol":consultaUsuario.rol
         }, 
             process.env.JWT_SECRET, {"expiresIn":"1hr"}
         );
 
-        respuesta.status(201).json({"msj":"Inicio de sesion exitoso!","token":token})
+        respuesta.status(201).json({"msj":"Inicio de sesion exitoso!","token":token,"usuario":consultaUsuario})
     } catch (error) {
         respuesta.status(500).json({"msj":error})
     }
@@ -60,7 +70,7 @@ const consultar_usuario = async (req, res) => {
 const insertar_usuario = async (req, res) => {
     try {
         const { usuario, password, rol, estado } = req.body;
-       
+      
         if (usuario == "" || password == "" || rol == "" || estado == "") {
             res.json({"msj":"Campos vacios por llenar"})
             
@@ -76,27 +86,43 @@ const insertar_usuario = async (req, res) => {
 
 const actualizar_usuario = async (req, res) => {
     try {
-        const { usuario, password, rol, estado } = req.body;
-        if (req.user.rol !== 1) return res.status(403).json({ msj: "Sin permisos para efectuar esta acción" });
-        
+        const { usuario, password, rol, estado } = req.body;        
         const usuarioBuscado = req.params.usuario;
+        const usuarioTipo = req.params.tipo;
 
-        await Usuario.updateOne(
-            { usuario: usuarioBuscado },
-            { $set: { usuario, password, rol, estado } }
-        );
-
-        res.status(201).json({ msj: "¡Actualización correcta!" });
+        if (password == '') {
+            await Usuario.updateOne(
+                { usuario: usuarioBuscado },
+                { $set: { "usuario":usuario,"rol":rol,"estado":estado} }
+            );
+            if (usuarioTipo == usuarioBuscado) {
+                res.status(201).json({ msj: "¡Actualización correcta!",tipo:"adm"});
+            }
+            res.status(201).json({ msj: "¡Actualización correcta!",tipo:"normal"});
+        } else {
+            const  cifrado = await bcrypt.hash(password,10);
+            await Usuario.updateOne(
+                { usuario: usuarioBuscado },
+                { $set: { "usuario":usuario, "password":cifrado,"rol":rol,"estado":estado} }
+            );
+            if (usuarioTipo == usuarioBuscado) {
+                res.status(201).json({ msj: "¡Actualización correcta!",tipo:"adm"});
+            }
+            res.status(201).json({ msj: "¡Actualización correcta!",tipo:"normal"});
+        }
+        
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ msj: error.message });
     }
 };
 
 const eliminar_usuario = async (req, res) => {
     try {
-        const { usuario } = req.params;
+        const usuario = req.params.usuario;
+        const tipo = req.params.tipo;
 
-        if (res.user.rol !== 1) return res.status(403).json({ msj: "Sin permisos para efectuar esta acción" });
+        if (tipo == usuario) return res.status(404).json({ msj: "No puedes eliminartr a ti mismo" });
+
         const resultado = await Usuario.deleteOne({ usuario });
 
         if (resultado.deletedCount === 0) {
